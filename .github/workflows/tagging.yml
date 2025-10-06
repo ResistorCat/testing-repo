@@ -1,99 +1,15 @@
 name: Semantic Versioning
 
 on:
-  workflow_run:
-    workflows: ["CI"]
-    types:
-      - completed
+  pull_request_target:
+    types: [closed]
+    branches:
+      - main
 
 jobs:
-  tag:
+  tagging:
+    if: github.event.pull_request.merged == true && github.head_ref == 'dev'
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
-    permissions:
-      contents: write
-      actions: write
-
     steps:
-      - name: Debug workflow run context
-        run: |
-          echo "Workflow run head branch: ${{ github.event.workflow_run.head_branch }}"
-          echo "Workflow run event: ${{ github.event.workflow_run.event }}"
-          echo "Workflow run head sha: ${{ github.event.workflow_run.head_sha }}"
-          echo "Repository default branch: ${{ github.event.repository.default_branch }}"
-
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Required to access the full tag history
-
-      - name: Get source branch for PR
-        id: get_source_branch
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          RUN_ID: ${{ github.event.workflow_run.id }}
-        run: |
-          # The workflow_run event does not directly contain the source branch.
-          # We get it by querying the GitHub API about the workflow run that triggered this one.
-          PR_URL=$(gh api "repos/$REPO/actions/runs/$RUN_ID" --jq '.pull_requests[0].url')
-          if [ -z "$PR_URL" ] || [ "$PR_URL" == "null" ]; then
-            echo "No associated PR found. Defaulting to 'patch'."
-            echo "source_branch=other" >> $GITHUB_OUTPUT
-          else
-            SOURCE_BRANCH=$(gh api "$PR_URL" --jq '.head.ref')
-            echo "Source branch from PR: $SOURCE_BRANCH"
-            echo "source_branch=$SOURCE_BRANCH" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Determine version bump
-        id: version_bump
-        run: |
-          SOURCE_BRANCH="${{ steps.get_source_branch.outputs.source_branch }}"
-          BUMP="patch" # Default to patch
-          if [[ "$SOURCE_BRANCH" == "dev" ]]; then
-            BUMP="minor"
-          elif [[ "$SOURCE_BRANCH" == "release" ]]; then
-            BUMP="major"
-          fi
-          echo "Version bump: $BUMP"
-          echo "bump=$BUMP" >> $GITHUB_OUTPUT
-
-      - name: Generate and push new tag
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-
-          # Get the latest tag. Returns an empty string if none.
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-
-          if [ -z "$LATEST_TAG" ]; then
-            # If no tags, initial version is v0.1.0
-            NEW_TAG="v0.1.0"
-          else
-            # Parse the latest tag (e.g., v1.2.3)
-            LATEST_TAG_CLEAN=${LATEST_TAG#v}
-            IFS='.' read -r -a V <<< "$LATEST_TAG_CLEAN"
-            MAJOR=${V[0]}
-            MINOR=${V[1]}
-            PATCH=${V[2]}
-
-            # Increment the version based on the bump type
-            BUMP="${{ steps.version_bump.outputs.bump }}"
-            if [[ "$BUMP" == "major" ]]; then
-              MAJOR=$((MAJOR + 1))
-              MINOR=0
-              PATCH=0
-            elif [[ "$BUMP" == "minor" ]]; then
-              MINOR=$((MINOR + 1))
-              PATCH=0
-            else # patch
-              PATCH=$((PATCH + 1))
-            fi
-            NEW_TAG="v$MAJOR.$MINOR.$PATCH"
-          fi
-
-          echo "Latest tag: $LATEST_TAG"
-          echo "New tag: $NEW_TAG"
-          git tag $NEW_TAG
-          git push origin $NEW_TAG
+      - name: Debug
+        run: echo "Tagging job running!"
