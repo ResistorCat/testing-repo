@@ -1,0 +1,64 @@
+name: Pre-release Versioning
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
+    branches:
+      - dev
+
+jobs:
+  pre-tag:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required to access the full tag history
+
+      - name: Generate and push new pre-release tag
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+          # Get the latest tag (both stable and pre-releases)
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          if [ -z "$LATEST_TAG" ]; then
+            # If no tags, the first pre-release is based on v0.1.0
+            NEW_TAG="v0.1.0-dev.1"
+          else
+            # Clean the 'v' prefix
+            LATEST_TAG_CLEAN=${LATEST_TAG#v}
+
+            # Separate the base version from the pre-release part
+            BASE_VERSION=$(echo $LATEST_TAG_CLEAN | cut -d'-' -f1)
+            PRE_RELEASE_PART=$(echo $LATEST_TAG_CLEAN | grep -o '\-.*')
+
+            IFS='.' read -r -a V <<< "$BASE_VERSION"
+            MAJOR=${V[0]}
+            MINOR=${V[1]}
+            PATCH=${V[2]}
+
+            if [ -z "$PRE_RELEASE_PART" ]; then
+              # The last tag is stable (e.g., v1.2.3), so we start a new minor pre-release series
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              NEW_TAG="v$MAJOR.$MINOR.$PATCH-dev.1"
+            else
+              # The last tag is a pre-release (e.g., v1.2.3-dev.4)
+              PRE_RELEASE_ID=$(echo $PRE_RELEASE_PART | cut -d'.' -f1) # -dev
+              PRE_RELEASE_NUM=$(echo $PRE_RELEASE_PART | cut -d'.' -f2)
+
+              # Increment the pre-release number
+              PRE_RELEASE_NUM=$((PRE_RELEASE_NUM + 1))
+              NEW_TAG="v$MAJOR.$MINOR.$PATCH$PRE_RELEASE_ID.$PRE_RELEASE_NUM"
+            fi
+          fi
+
+          echo "New pre-release tag: $NEW_TAG"
+          git tag $NEW_TAG
+          git push origin $NEW_TAG
