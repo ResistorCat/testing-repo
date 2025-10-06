@@ -1,14 +1,15 @@
 name: Semantic Versioning
 
 on:
-  pull_request_target:
-    types: [closed]
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
     branches:
       - main
 
 jobs:
   tagging:
-    if: github.event.pull_request.merged == true && github.head_ref == 'dev'
     runs-on: ubuntu-latest
     steps:
       - name: Debug
