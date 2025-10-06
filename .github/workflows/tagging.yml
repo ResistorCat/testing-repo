@@ -36,7 +36,7 @@ jobs:
           echo "Commit SHA: $COMMIT_SHA"
           
           # Find the pull request that was merged with this commit
-          PR_DATA=$(gh api repos/$REPO/pulls --state closed --sort updated --direction desc --per-page 100 | \
+          PR_DATA=$(gh api "repos/$REPO/pulls?state=closed&sort=updated&direction=desc&per_page=100" | \
             jq -r --arg sha "$COMMIT_SHA" '.[] | select(.merge_commit_sha == $sha) | .head.ref')
           
           if [ -n "$PR_DATA" ]; then
