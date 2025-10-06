@@ -4,14 +4,10 @@ on:
   push:
     branches:
       - dev
-  pull_request_target:
-    types: [closed]
-    branches:
       - main
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || (github.event.pull_request.merged == true && github.head_ref == 'dev')
     steps:
       - run: echo "CI job running!"
